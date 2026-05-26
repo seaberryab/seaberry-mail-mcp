@@ -1,0 +1,19 @@
+## .NET
+bin/
+obj/
+out/
+*.user
+*.suo
+*.userprefs
+.vs/
+
+## macOS
+.DS_Store
+
+## Local Claude Code state
+.claude/
+
+## Editor / IDE
+.idea/
+.vscode/
+*.swp
