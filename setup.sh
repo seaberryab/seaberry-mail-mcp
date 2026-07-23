@@ -5,8 +5,9 @@
 # Idempotent: safe to re-run. Reuses an existing app by display name and
 # replaces its permission set atomically — so re-running corrects any prior mistakes.
 #
-# Output: writes ~/.config/mail-mcp/config.json with { ClientId, TenantId, AllowedInviteDomains }.
-# If config.json already exists, AllowedInviteDomains is preserved.
+# Output: writes ~/.config/mail-mcp/config.json with
+#   { ClientId, TenantId, AllowedInviteDomains, ArchiveFolderName }.
+# If config.json already exists, AllowedInviteDomains and ArchiveFolderName are preserved.
 
 set -euo pipefail
 
@@ -122,19 +123,23 @@ mkdir -p "$CONFIG_DIR"
 chmod 700 "$CONFIG_DIR"
 
 if [[ -f "$CONFIG_FILE" ]]; then
-  # Preserve whatever the user has configured. Don't clobber a manually-widened list.
+  # Preserve whatever the user has configured. Don't clobber a manually-widened list
+  # or a renamed archive folder.
   EXISTING_DOMAINS="$(jq -c '.AllowedInviteDomains // []' "$CONFIG_FILE" 2>/dev/null || echo '[]')"
+  EXISTING_ARCHIVE="$(jq -r '.ArchiveFolderName // "Archived by AI"' "$CONFIG_FILE" 2>/dev/null || echo 'Archived by AI')"
 else
   # Fresh install: empty allowlist. create_meeting will refuse every attendee until
   # the user explicitly opts in by editing AllowedInviteDomains in config.json.
   EXISTING_DOMAINS='[]'
+  EXISTING_ARCHIVE='Archived by AI'
 fi
 
 jq -n \
   --arg clientId "$APP_ID" \
   --arg tenantId "$TENANT_ID" \
   --argjson allowedDomains "$EXISTING_DOMAINS" \
-  '{ClientId: $clientId, TenantId: $tenantId, AllowedInviteDomains: $allowedDomains}' \
+  --arg archiveFolder "$EXISTING_ARCHIVE" \
+  '{ClientId: $clientId, TenantId: $tenantId, AllowedInviteDomains: $allowedDomains, ArchiveFolderName: $archiveFolder}' \
   > "$CONFIG_FILE"
 chmod 600 "$CONFIG_FILE"
 

@@ -27,6 +27,8 @@ If you're building your own MCP server, the patterns above are the takeaways mor
 | `search_messages`  | Mail search by query (KQL-style operators supported). Paged automatically.     |
 | `get_message`      | Full body of one message; text-extracted or HTML.                              |
 | `create_draft`     | Create a draft email. Never sends — review and send from Outlook yourself.     |
+| `archive_messages` | Soft-archive Inbox messages to "Archived by AI" subfolder. Not a delete.       |
+| `unarchive_messages` | Restore previously-archived messages back to Inbox.                          |
 | `list_events`      | Calendar over a date range. Uses `calendarView` so recurring events expand.    |
 | `search_events`    | Find events by subject substring; optionally constrained to a date range.      |
 | `block_time`       | Personal calendar block — no attendees, structurally cannot send invites.      |
@@ -66,6 +68,17 @@ Notably **not** allowed (and never should be without serious thought):
 
 Adding a new permitted deletion path requires a deliberate code edit in `ReadOnlyGuardHandler.cs`. To delete the other types of items, use Outlook directly.
 
+### Soft-archive instead of delete
+
+Because real delete on messages is permanently off the table, the cleanup workflow is a **move** to a dedicated subfolder named "Archived by AI" (configurable via `ArchiveFolderName` in `config.json`). `archive_messages` moves Inbox messages into that folder; `unarchive_messages` puts them back. Properties:
+
+- **Nothing is destroyed.** Messages remain in the mailbox under a clearly-labeled folder, visible to anyone auditing the mailbox.
+- **Atomic per message.** Each move either succeeds or fails individually; no batch transaction. Failures surface per-id without aborting the rest.
+- **Source-folder gated.** `archive_messages` accepts only messages currently in Inbox; messages already elsewhere (Sent, Drafts, the archive itself) are skipped per-id with an explicit reason. `unarchive_messages` mirrors this — accepts only messages currently in the archive folder.
+- **Fixed destination.** Both tools move to a single, configured folder. No "move to arbitrary folder" surface is exposed.
+- **Batch cap of 25.** Prevents a stray "archive everything" prompt from sweeping the whole inbox in one shot.
+- **Lazy folder create.** The archive folder is created on the first archive call if it doesn't already exist.
+
 ## Prerequisites
 
 - macOS, Linux, or WSL.
@@ -91,7 +104,7 @@ This is idempotent. It will:
 - Stage all three delegated Microsoft Graph permissions: `Mail.ReadWrite`, `Calendars.ReadWrite`, and `Tasks.ReadWrite`. Scope IDs are resolved dynamically from the live Graph service principal in your tenant, not hardcoded.
 - Atomically replace the app's required-resource-accesses (re-running the script corrects any prior wrong state rather than accumulating orphan permissions).
 - Grant admin consent (with a retry loop for the service-principal replication race).
-- Write `~/.config/mail-mcp/config.json` with `ClientId`, `TenantId`, and `AllowedInviteDomains` (defaults to `[]` on fresh installs — see "Widening the allowlist"; preserved across re-runs).
+- Write `~/.config/mail-mcp/config.json` with `ClientId`, `TenantId`, `AllowedInviteDomains` (defaults to `[]` on fresh installs — see "Widening the allowlist"; preserved across re-runs), and `ArchiveFolderName` (defaults to `"Archived by AI"`; preserved across re-runs).
 
 The MCP server itself does **not** invoke `az`. Provisioning is a one-shot script you run deliberately from your shell.
 
@@ -149,6 +162,7 @@ Then restart the MCP. `setup.sh` is safe to re-run — it preserves any edits yo
 - *"Find emails from Alice about Q3 budget."* → `search_messages` with query `from:alice subject:"Q3 budget"`.
 - *"Show me the full body of that third message."* → `get_message` with the id, `bodyFormat: "text"`.
 - *"Draft a reply to Bob saying I'll review by Friday."* → `create_draft`.
+- *"Clean up the newsletters and notifications in my Inbox."* → `search_messages` to enumerate ids, then `archive_messages` to move them to "Archived by AI". Restore with `unarchive_messages` if needed.
 - *"What's on my calendar this week?"* → `list_events` with the week's range.
 - *"Block 2-4pm tomorrow for deep work."* → `block_time`.
 - *"Set up a 30-min sync with carol@example.com tomorrow at 10am."* → `create_meeting` (first call returns a preview; re-invoke with `sendInvites: true` to send — assuming `example.com` is in your allowlist).

@@ -12,6 +12,11 @@ public sealed record AppConfig
     // Fail-loud-by-default is the whole point of the gate.
     public List<string> AllowedInviteDomains { get; init; } = [];
 
+    // Display name of the folder used as a soft-archive destination by archive_messages.
+    // Self-documenting in Outlook so a human reviewing the mailbox can see which messages
+    // were moved by AI vs. by the user. Configurable so the convention can evolve.
+    public string ArchiveFolderName { get; init; } = "Archived by AI";
+
     [JsonIgnore]
     public bool IsProvisioned => !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(TenantId);
 
