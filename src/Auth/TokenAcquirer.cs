@@ -86,18 +86,24 @@ public sealed class TokenAcquirer
             }
         }
 
-        // 2. Interactive (system browser, loopback).
-        try
+        // 2. Interactive (system browser, loopback). Skipped on headless Linux, where it would hang.
+        var headless = OperatingSystem.IsLinux()
+            && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY"))
+            && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+        if (!headless)
         {
-            var interactive = await app.AcquireTokenInteractive(Scopes)
-                .WithUseEmbeddedWebView(false)
-                .ExecuteAsync(ct)
-                .ConfigureAwait(false);
-            return new AcquireOutcome(interactive.AccessToken, interactive.Account.Username, false, null, interactive.Scopes);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _log.LogWarning(ex, "interactive sign-in failed; falling back to device code");
+            try
+            {
+                var interactive = await app.AcquireTokenInteractive(Scopes)
+                    .WithUseEmbeddedWebView(false)
+                    .ExecuteAsync(ct)
+                    .ConfigureAwait(false);
+                return new AcquireOutcome(interactive.AccessToken, interactive.Account.Username, false, null, interactive.Scopes);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogWarning(ex, "interactive sign-in failed; falling back to device code");
+            }
         }
 
         // 3. Device code fallback (WSL, headless).

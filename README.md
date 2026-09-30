@@ -146,6 +146,8 @@ From Claude, invoke `ensure_setup`. The first call will trigger an interactive b
 
 The token cache is stored OS-encrypted (Keychain on macOS, DPAPI on Windows, libsecret on Linux) under `~/.config/mail-mcp/msal.cache.bin`.
 
+On headless Linux, where no keyring is available, set `MAIL_MCP_ALLOW_FILE_CACHE=1` to store the cache as a plain file readable only by the current user (mode 0600). Sign-in then uses the device code flow.
+
 ## Widening the allowlist
 
 A fresh install starts with `AllowedInviteDomains: []` — no attendee can be invited until you opt in. To allow your own domain (e.g. `example.com`):
