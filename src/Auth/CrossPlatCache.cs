@@ -13,6 +13,9 @@ internal static class CrossPlatCache
     private const string LinuxKeyRingCollection = "default";
     private const string LinuxKeyRingLabel = "Seaberry Mail MCP MSAL token cache";
 
+    // Opt-in: on Linux without a usable keyring, fall back to a user-only (0600) cache file.
+    private const string AllowFileCacheEnvVar = "MAIL_MCP_ALLOW_FILE_CACHE";
+
     public static async Task AttachAsync(IPublicClientApplication app)
     {
         Directory.CreateDirectory(AppConfig.ConfigDirectory);
@@ -29,6 +32,34 @@ internal static class CrossPlatCache
             .Build();
 
         var helper = await MsalCacheHelper.CreateAsync(storageProps).ConfigureAwait(false);
+
+        if (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable(AllowFileCacheEnvVar) == "1")
+        {
+            try
+            {
+                helper.VerifyPersistence();
+            }
+            catch (MsalCachePersistenceException)
+            {
+                var fileProps = new StorageCreationPropertiesBuilder(CacheFileName, AppConfig.ConfigDirectory)
+                    .WithLinuxUnprotectedFile()
+                    .WithCacheChangedEvent(app.AppConfig.ClientId)
+                    .Build();
+                helper = await MsalCacheHelper.CreateAsync(fileProps).ConfigureAwait(false);
+                RestrictToOwner(fileProps.CacheFilePath);
+            }
+        }
+
         helper.RegisterCache(app.UserTokenCache);
+    }
+
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private static void RestrictToOwner(string path)
+    {
+        if (!File.Exists(path))
+        {
+            using (File.Create(path)) { }
+        }
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
 }
