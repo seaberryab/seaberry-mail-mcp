@@ -249,7 +249,7 @@ public sealed class MailTools
         GraphClientFactory factory,
         [Description("Subject line.")]
         string subject,
-        [Description("Body (HTML). Plain text also accepted; will be rendered as HTML if it contains tags.")]
+        [Description("Body. HTML if it contains tags; otherwise sent as plain text so line breaks are kept.")]
         string body,
         [Description("Primary recipients (email addresses).")]
         string[] to,
@@ -271,7 +271,7 @@ public sealed class MailTools
             Subject = subject,
             Body = new ItemBody
             {
-                ContentType = BodyType.Html,
+                ContentType = LooksLikeHtml(body) ? BodyType.Html : BodyType.Text,
                 Content = body ?? string.Empty,
             },
             ToRecipients = to.Select(ToRecipient).ToList(),
@@ -295,6 +295,9 @@ public sealed class MailTools
         }
         catch (Exception ex) { return FormatError("create_draft", ex); }
     }
+
+    private static bool LooksLikeHtml(string? body) =>
+        body is not null && System.Text.RegularExpressions.Regex.IsMatch(body, @"<\s*/?\s*[a-zA-Z][^>]*>");
 
     // ─── archive_messages ────────────────────────────────────────────────────
 
